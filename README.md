@@ -58,10 +58,12 @@ Google 계정 > 보안 > 2단계 인증 활성화 후 "앱 비밀번호"에서 �
 
 ## 자동 실행(GitHub Actions) 설정
 
-1. 저장소 **Settings > Secrets and variables > Actions**에서 아래 3개 Secret 등록
+1. 저장소 **Settings > Secrets and variables > Actions**에서 아래 Secret 등록
    - `EMAIL_ADDRESS`
    - `EMAIL_APP_PASSWORD`
    - `EMAIL_RECEIVER`
+   - (선택) `KRX_ID`, `KRX_PW` — data.krx.co.kr 회원 계정. 클라우드(GitHub Actions) IP에서
+     KRX가 익명 요청을 차단하는 경우, 로그인 세션을 사용해 우회를 시도합니다.
 2. 이후 평일 16:30 KST에 자동 실행되며, **Actions** 탭에서 `workflow_dispatch`로 수동 실행도 가능
 3. Private 저장소 기준 GitHub Actions 무료 한도(월 2,000분) 내에서 충분히 운용 가능
 
