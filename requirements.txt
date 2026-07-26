@@ -1,0 +1,4 @@
+pandas>=2.0
+yfinance>=0.2.40
+pykrx>=1.0.45
+python-dotenv>=1.0

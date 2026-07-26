@@ -1,0 +1,44 @@
+name: Daily Alpha-Flow Report
+
+on:
+  schedule:
+    # 매주 월~금 16:30 KST = 07:30 UTC (한국은 서머타임 없음)
+    - cron: "30 7 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily report
+        env:
+          EMAIL_ADDRESS: ${{ secrets.EMAIL_ADDRESS }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+        run: python main.py
+
+      - name: Commit updated portfolio.json (peak price tracking)
+        run: |
+          git config user.name "alpha-flow-bot"
+          git config user.email "actions@github.com"
+          if ! git diff --quiet -- config/portfolio.json; then
+            git add config/portfolio.json
+            git commit -m "chore: update peak_price [skip ci]"
+            git push
+          else
+            echo "포트폴리오 변경 없음 - 커밋 생략"
+          fi
