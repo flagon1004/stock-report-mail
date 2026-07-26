@@ -40,14 +40,29 @@ def _recent_weekdays(lookback_days=15):
 
 
 def get_universe():
-    """KOSPI200 + KOSDAQ150 구성종목 티커 집합을 반환."""
+    """
+    KOSPI200 + KOSDAQ150 구성종목 티커 집합을 반환.
+
+    주의: get_index_portfolio_deposit_file(code)를 날짜 없이 호출하면 pykrx가
+    내부적으로 "가장 최근 영업일"을 알아내려고 get_index_ohlcv_by_date(...,"1001")를
+    자동 호출하는데, 이 내부 호출이 실패하면 전체가 깨진다. 날짜를 직접 지정해서
+    이 내부 호출 자체를 건너뛴다.
+    """
     universe = set()
     for name, code in config.UNIVERSE_INDEX_CODES.items():
-        try:
-            tickers = stock.get_index_portfolio_deposit_file(code)
-            universe.update(tickers)
-        except Exception as e:
-            print(f"[경고] {name} 유니버스 조회 실패: {e}")
+        got = False
+        for date_str in _recent_weekdays(lookback_days=10):
+            try:
+                tickers = stock.get_index_portfolio_deposit_file(code, date=date_str)
+                if tickers:
+                    universe.update(tickers)
+                    got = True
+                    break
+            except Exception:
+                continue
+            time.sleep(0.2)
+        if not got:
+            print(f"[경고] {name} 유니버스 조회 실패: 최근 10거래일 후보 모두 실패")
     return universe
 
 
