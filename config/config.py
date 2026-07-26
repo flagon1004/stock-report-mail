@@ -12,8 +12,28 @@ load_dotenv()
 EMAIL_SENDER = os.environ.get("EMAIL_ADDRESS")
 EMAIL_APP_PASSWORD = os.environ.get("EMAIL_APP_PASSWORD")
 EMAIL_RECEIVER = os.environ.get("EMAIL_RECEIVER", "kbrothers.han@gmail.com")
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
+
+# SMTP 서버는 SMTP_SERVER/SMTP_PORT 환경변수로 직접 지정할 수 있고,
+# 지정하지 않으면 EMAIL_ADDRESS의 도메인으로 자동 판별한다 (모르는 도메인은 Gmail로 기본 처리).
+_SMTP_PRESETS = {
+    "gmail.com": ("smtp.gmail.com", 587),
+    "naver.com": ("smtp.naver.com", 587),
+    "daum.net": ("smtp.daum.net", 587),
+    "hanmail.net": ("smtp.daum.net", 587),
+}
+
+
+def _resolve_smtp():
+    server = os.environ.get("SMTP_SERVER")
+    port = os.environ.get("SMTP_PORT")
+    if server:
+        return server, int(port) if port else 587
+
+    domain = EMAIL_SENDER.split("@")[-1].lower() if EMAIL_SENDER and "@" in EMAIL_SENDER else ""
+    return _SMTP_PRESETS.get(domain, ("smtp.gmail.com", 587))
+
+
+SMTP_SERVER, SMTP_PORT = _resolve_smtp()
 
 # ── 자금 설정 ────────────────────────────────────────────────
 TOTAL_CAPITAL = 100_000_000  # 1억원
