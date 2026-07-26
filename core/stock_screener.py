@@ -26,22 +26,16 @@ from config import config
 from pykrx import stock
 
 
-def _recent_business_days(n_needed, lookback_days=15):
-    """오늘부터 거슬러 올라가며 실제 거래가 있었던 날짜 문자열(YYYYMMDD) n_needed개를 최신순으로 반환."""
+def _recent_weekdays(lookback_days=15):
+    """오늘부터 거슬러 올라가며 평일(월~금) 날짜 문자열(YYYYMMDD) 후보를 최신순으로 반환.
+    공휴일이 섞여 있을 수 있으며, 실제 거래일 여부는 데이터 조회 시점에 판별한다
+    (별도 지수 조회로 거래일을 미리 확인하지 않음 - 불필요한 API 호출과 실패 지점을 줄이기 위함)."""
     days = []
     d = datetime.today()
-    tries = 0
-    while len(days) < n_needed and tries < lookback_days:
-        date_str = d.strftime("%Y%m%d")
-        # 거래일 여부는 지수 데이터 존재 여부로 간접 확인
-        try:
-            df = stock.get_index_ohlcv_by_date(date_str, date_str, "1001")  # KOSPI 종합지수
-            if df is not None and not df.empty:
-                days.append(date_str)
-        except Exception:
-            pass
+    for _ in range(lookback_days):
+        if d.weekday() < 5:  # 0=월 ... 4=금
+            days.append(d.strftime("%Y%m%d"))
         d -= timedelta(days=1)
-        tries += 1
     return days
 
 
@@ -58,26 +52,39 @@ def get_universe():
 
 
 def _net_buy_by_day(date_str, investor):
-    """특정일, 특정 투자자 유형의 종목별 순매수거래대금(원) Series 반환 (ticker -> 금액)."""
+    """특정일, 특정 투자자 유형의 종목별 순매수거래대금(원) Series 반환 (ticker -> 금액).
+    데이터가 없는 날(휴장일 등)이거나 조회 실패 시 None을 반환한다."""
     try:
         df = stock.get_market_net_purchases_of_equities_by_ticker(
             date_str, date_str, "ALL", investor
         )
+        if df is None or df.empty:
+            return None
         col = "순매수거래대금" if "순매수거래대금" in df.columns else df.columns[-1]
         return df[col]
     except Exception:
         return None
 
 
-def _check_net_buy_streak(universe, business_days):
-    """universe 내 종목 중, 주어진 거래일 전부에서 외국인+기관 모두 순매수(>0)한 종목 집합 반환."""
+def _check_net_buy_streak(universe, candidate_days, days_needed):
+    """
+    universe 내 종목 중, 최근 실제 거래일 days_needed일 연속으로 외국인+기관 모두
+    순매수(>0)한 종목 집합을 반환한다.
+
+    candidate_days는 평일 후보 목록(공휴일 포함 가능)이며, 데이터가 없는 날은
+    거래일이 아닌 것으로 보고 건너뛴다(거래일수에 포함하지 않음).
+
+    반환값: (통과 종목 집합, 실제 사용된 거래일 목록[최신순])
+    """
     passed = set(universe)
-    for date_str in business_days:
+    used_days = []
+    for date_str in candidate_days:
         foreign = _net_buy_by_day(date_str, "외국인")
         institution = _net_buy_by_day(date_str, "기관합계")
         if foreign is None or institution is None:
-            print(f"[경고] {date_str} 순매수 데이터 조회 실패 - 해당일 필터 스킵")
-            continue
+            continue  # 휴장일 등 - 거래일수에 포함하지 않고 스킵
+
+        used_days.append(date_str)
         day_pass = set()
         for ticker in passed:
             f_val = foreign.get(ticker, 0)
@@ -85,15 +92,18 @@ def _check_net_buy_streak(universe, business_days):
             if f_val > 0 and i_val > 0:
                 day_pass.add(ticker)
         passed = day_pass
+
+        if len(used_days) >= days_needed:
+            break
         if not passed:
             break
-    return passed
+    return passed, used_days
 
 
-def _trading_value_ratio(ticker, business_days):
+def _trading_value_ratio(ticker, latest_trading_day):
     """당일 거래대금 / 최근 20일(당일 제외) 평균 거래대금 비율을 반환. 실패 시 None."""
     try:
-        end = business_days[0]
+        end = latest_trading_day
         start = (datetime.strptime(end, "%Y%m%d") - timedelta(days=45)).strftime("%Y%m%d")
         df = stock.get_market_ohlcv_by_date(start, end, ticker)
         if df is None or "거래대금" not in df.columns or len(df) < config.MA_MID + 1:
@@ -119,20 +129,20 @@ def screen_stocks():
       "data_error": False
     }
     """
-    business_days = _recent_business_days(config.NET_BUY_STREAK_DAYS)
-    if len(business_days) < config.NET_BUY_STREAK_DAYS:
-        return {"candidates": [], "data_error": True,
-                "error": "최근 거래일 데이터를 충분히 가져오지 못함"}
-
     universe = get_universe()
     if not universe:
         return {"candidates": [], "data_error": True, "error": "유니버스 조회 실패"}
 
-    streak_passed = _check_net_buy_streak(universe, business_days)
+    candidate_days = _recent_weekdays(lookback_days=15)
+    streak_passed, used_days = _check_net_buy_streak(universe, candidate_days, config.NET_BUY_STREAK_DAYS)
+    if len(used_days) < config.NET_BUY_STREAK_DAYS:
+        return {"candidates": [], "data_error": True,
+                "error": f"최근 거래일 데이터를 충분히 가져오지 못함 (확보: {len(used_days)}일)"}
 
+    latest_trading_day = used_days[0]
     candidates = []
     for ticker in streak_passed:
-        ratio = _trading_value_ratio(ticker, business_days)
+        ratio = _trading_value_ratio(ticker, latest_trading_day)
         grade = "S" if (ratio is not None and ratio >= config.VOLUME_SURGE_MULTIPLIER) else "A"
         try:
             name = stock.get_market_ticker_name(ticker)
