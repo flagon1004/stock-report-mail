@@ -122,9 +122,16 @@ def send_email(subject, body):
     msg["From"] = config.EMAIL_SENDER
     msg["To"] = config.EMAIL_RECEIVER
 
-    with smtplib.SMTP(config.SMTP_SERVER, config.SMTP_PORT) as server:
-        server.starttls()
-        server.login(config.EMAIL_SENDER, config.EMAIL_APP_PASSWORD)
+    # 포트 465 = SSL(암시적 암호화), 그 외(587 등) = STARTTLS
+    if config.SMTP_PORT == 465:
+        server_cm = smtplib.SMTP_SSL(config.SMTP_SERVER, config.SMTP_PORT)
+    else:
+        server_cm = smtplib.SMTP(config.SMTP_SERVER, config.SMTP_PORT)
+
+    with server_cm as server:
+        if config.SMTP_PORT != 465:
+            server.starttls()
+        server.login(config.SMTP_LOGIN_USER, config.EMAIL_APP_PASSWORD)
         server.sendmail(config.EMAIL_SENDER, [config.EMAIL_RECEIVER], msg.as_string())
 
 

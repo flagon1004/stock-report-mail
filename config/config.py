@@ -15,12 +15,17 @@ EMAIL_RECEIVER = os.environ.get("EMAIL_RECEIVER", "kbrothers.han@gmail.com")
 
 # SMTP 서버는 SMTP_SERVER/SMTP_PORT 환경변수로 직접 지정할 수 있고,
 # 지정하지 않으면 EMAIL_ADDRESS의 도메인으로 자동 판별한다 (모르는 도메인은 Gmail로 기본 처리).
+# 포트 465는 SSL(암시적 암호화), 그 외(587 등)는 STARTTLS 방식으로 접속한다 (email_sender.py 참고).
 _SMTP_PRESETS = {
     "gmail.com": ("smtp.gmail.com", 587),
-    "naver.com": ("smtp.naver.com", 587),
-    "daum.net": ("smtp.daum.net", 587),
-    "hanmail.net": ("smtp.daum.net", 587),
+    "naver.com": ("smtp.naver.com", 465),
+    "daum.net": ("smtp.daum.net", 465),
+    "hanmail.net": ("smtp.daum.net", 465),
 }
+
+# 네이버/다음 등 국내 포털은 SMTP 로그인 아이디로 전체 이메일 주소가 아니라
+# '@' 앞의 아이디 부분만 요구한다 (Gmail은 전체 이메일 주소 필요).
+_ID_ONLY_LOGIN_DOMAINS = {"naver.com", "daum.net", "hanmail.net"}
 
 
 def _resolve_smtp():
@@ -33,7 +38,16 @@ def _resolve_smtp():
     return _SMTP_PRESETS.get(domain, ("smtp.gmail.com", 587))
 
 
+def _resolve_smtp_login_user():
+    if EMAIL_SENDER and "@" in EMAIL_SENDER:
+        domain = EMAIL_SENDER.split("@")[-1].lower()
+        if domain in _ID_ONLY_LOGIN_DOMAINS:
+            return EMAIL_SENDER.split("@")[0]
+    return EMAIL_SENDER
+
+
 SMTP_SERVER, SMTP_PORT = _resolve_smtp()
+SMTP_LOGIN_USER = _resolve_smtp_login_user()
 
 # ── 자금 설정 ────────────────────────────────────────────────
 TOTAL_CAPITAL = 100_000_000  # 1억원
