@@ -9,9 +9,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── 이메일 설정 ──────────────────────────────────────────────
-EMAIL_SENDER = os.environ.get("EMAIL_ADDRESS")
-EMAIL_APP_PASSWORD = os.environ.get("EMAIL_APP_PASSWORD")
-EMAIL_RECEIVER = os.environ.get("EMAIL_RECEIVER", "kbrothers.han@gmail.com")
+# GitHub Secrets/,env 값에 실수로 공백/줄바꿈이 섞여도 도메인 판별이 깨지지 않도록 strip 처리.
+EMAIL_SENDER = (os.environ.get("EMAIL_ADDRESS") or "").strip() or None
+EMAIL_APP_PASSWORD = (os.environ.get("EMAIL_APP_PASSWORD") or "").strip() or None
+EMAIL_RECEIVER = (os.environ.get("EMAIL_RECEIVER") or "kbrothers.han@gmail.com").strip()
 
 # SMTP 서버는 SMTP_SERVER/SMTP_PORT 환경변수로 직접 지정할 수 있고,
 # 지정하지 않으면 EMAIL_ADDRESS의 도메인으로 자동 판별한다 (모르는 도메인은 Gmail로 기본 처리).

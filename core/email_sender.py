@@ -122,6 +122,9 @@ def send_email(subject, body):
     msg["From"] = config.EMAIL_SENDER
     msg["To"] = config.EMAIL_RECEIVER
 
+    # 실제로 어떤 서버/계정으로 접속을 시도하는지 로그에 남긴다 (비밀번호는 출력하지 않음).
+    print(f"[정보] SMTP 접속 시도: {config.SMTP_SERVER}:{config.SMTP_PORT} (로그인 계정: {config.SMTP_LOGIN_USER})")
+
     # 포트 465 = SSL(암시적 암호화), 그 외(587 등) = STARTTLS
     if config.SMTP_PORT == 465:
         server_cm = smtplib.SMTP_SSL(config.SMTP_SERVER, config.SMTP_PORT)
