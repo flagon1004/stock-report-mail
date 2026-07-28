@@ -116,19 +116,32 @@ def _check_net_buy_streak(universe, candidate_days, days_needed):
 
 
 def _trading_value_ratio(ticker, latest_trading_day):
-    """당일 거래대금 / 최근 20일(당일 제외) 평균 거래대금 비율을 반환. 실패 시 None."""
+    """당일 거래대금 / 최근 20일(당일 제외) 평균 거래대금 비율을 반환. 실패 시 None(원인은 로그에 남김).
+
+    이 함수는 양매수 필터를 통과한 소수 종목에만 호출되므로 종목별 실패 로그를 남겨도
+    유니버스 전체(약 350종목)를 스캔하는 다른 단계처럼 로그가 폭주하지 않는다.
+    """
     try:
         end = latest_trading_day
         start = (datetime.strptime(end, "%Y%m%d") - timedelta(days=45)).strftime("%Y%m%d")
         df = stock.get_market_ohlcv_by_date(start, end, ticker)
-        if df is None or "거래대금" not in df.columns or len(df) < config.MA_MID + 1:
+        if df is None or df.empty:
+            print(f"[경고] {ticker} 거래대금 조회 실패 - 조회 결과 없음 (기간 {start}~{end})")
+            return None
+        if "거래대금" not in df.columns:
+            print(f"[경고] {ticker} 거래대금 조회 실패 - '거래대금' 컬럼 없음 (컬럼: {list(df.columns)})")
+            return None
+        if len(df) < config.MA_MID + 1:
+            print(f"[경고] {ticker} 거래대금 조회 실패 - 데이터 부족 ({len(df)}일치, {config.MA_MID + 1}일 필요)")
             return None
         today_value = df["거래대금"].iloc[-1]
         avg_20 = df["거래대금"].iloc[-(config.MA_MID + 1):-1].mean()
         if avg_20 == 0:
+            print(f"[경고] {ticker} 거래대금 조회 실패 - 20일 평균 거래대금이 0")
             return None
         return today_value / avg_20
-    except Exception:
+    except Exception as e:
+        print(f"[경고] {ticker} 거래대금 조회 실패 - {type(e).__name__}: {e}")
         return None
 
 
