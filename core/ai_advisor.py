@@ -68,8 +68,13 @@ def _parse_response_text(text):
 
 
 def generate_ai_opinions(decisions):
-    """티커 -> 참고의견(str) dict. 조건 미충족/실패 시 빈 dict."""
+    """티커 -> 참고의견(str) dict. 조건 미충족/실패 시 빈 dict.
+
+    실패해도 리포트 발송 자체는 막지 않지만, 원인은 로그에 남긴다
+    (조용히 삼키기만 하면 왜 AI 의견이 안 붙었는지 실행 로그로 진단할 수 없다).
+    """
     if not config.GEMINI_API_KEY:
+        print("[정보] GEMINI_API_KEY 미설정 - AI 참고의견 없이 진행합니다.")
         return {}
 
     items = _build_items(decisions)
@@ -86,10 +91,13 @@ def generate_ai_opinions(decisions):
         )
         opinions = _parse_response_text(response.text)
         valid_tickers = {i["ticker"] for i in items}
-        return {
+        result = {
             ticker: str(opinion).strip()
             for ticker, opinion in opinions.items()
             if ticker in valid_tickers and str(opinion).strip()
         }
-    except Exception:
+        print(f"[정보] AI 참고의견 {len(result)}건 생성 완료 (모델: {config.GEMINI_MODEL})")
+        return result
+    except Exception as e:
+        print(f"[경고] AI 참고의견 생성 실패 - {type(e).__name__}: {e}")
         return {}
