@@ -15,7 +15,8 @@ from config import config
 DIVIDER = "=" * 70
 
 
-def _fmt_holding(h):
+def _fmt_holding(h, ai_opinions=None):
+    ai_opinions = ai_opinions or {}
     lines = [f"[{h.get('name', h['ticker'])}] (모멘텀 {h.get('grade', '?')}등급)"]
     if h.get("decision") == "DATA_ERROR":
         lines.append(f"- 상태: 데이터 조회 실패 ({h.get('reason')}) - 수동 확인 필요")
@@ -28,12 +29,16 @@ def _fmt_holding(h):
     net_buy_str = "양매수 유지" if h.get("net_buy_ok") else "양매수 이탈/불명"
     lines.append(f"- 양매수 현황: [{net_buy_str}]")
     lines.append(f"- 당일 대응 판정: {h.get('decision')} - {h.get('reason')}")
+    opinion = ai_opinions.get(h["ticker"])
+    if opinion:
+        lines.append(f"- AI 참고의견: {opinion}")
     return "\n".join(lines)
 
 
 def build_report_text(decisions):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     market = decisions["market"]
+    ai_opinions = decisions.get("ai_opinions", {})
     lines = []
     lines.append("[Daily 주식 포트폴리오 & 시장 대응 리포트]")
     lines.append(f"발송 일시: {now} | 수신자: {config.EMAIL_RECEIVER}")
@@ -62,7 +67,7 @@ def build_report_text(decisions):
     lines.append(DIVIDER)
     if decisions["holdings"]:
         for h in decisions["holdings"]:
-            lines.append(_fmt_holding(h))
+            lines.append(_fmt_holding(h, ai_opinions))
             lines.append("")
     else:
         lines.append("- 현재 보유 종목 없음 (현금 100%)")
@@ -80,6 +85,9 @@ def build_report_text(decisions):
                 f"  1차 탐색 매수 권장: 목표비중 {c['target_weight']}% 중 "
                 f"{c['first_entry_weight']}% (약 {c['first_entry_amount']:,}원)"
             )
+            opinion = ai_opinions.get(c["ticker"])
+            if opinion:
+                lines.append(f"  AI 참고의견: {opinion}")
     else:
         lines.append("- 신규 편입 후보 없음")
 
@@ -89,6 +97,9 @@ def build_report_text(decisions):
                 f"- [SWAP 제안] {s['out']['name']}({s['out']['return_pct']:+.2f}%) 편출 → "
                 f"{s['in']['name']}({s['in']['grade']}등급) 편입 검토 - {s['reason']}"
             )
+            opinion = ai_opinions.get(s["in"]["ticker"])
+            if opinion:
+                lines.append(f"  AI 참고의견: {opinion}")
 
     lines.append(DIVIDER)
     lines.append("4. 조건 충족 양매수/모멘텀 후보군 (Watchlist)")
@@ -105,6 +116,11 @@ def build_report_text(decisions):
         "※ 본 리포트는 사전 정의된 규칙 기반의 참고 자료이며 투자 자문이 아닙니다. "
         "최종 매매 판단과 책임은 투자자 본인에게 있습니다."
     )
+    if ai_opinions:
+        lines.append(
+            "※ 'AI 참고의견'은 위 규칙 기반 판정 결과에 자동 생성되어 덧붙인 보조 설명이며, "
+            "등급/매매 판정을 대체하거나 변경하지 않습니다."
+        )
     lines.append(DIVIDER)
 
     return "\n".join(lines)

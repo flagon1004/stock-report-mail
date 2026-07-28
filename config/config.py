@@ -101,6 +101,15 @@ INDEX_TICKERS = {
     "KOSDAQ": "^KQ11",
 }
 
-# ── 파일 경로 ────────────────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PORTFOLIO_FILE = os.path.join(BASE_DIR, "config", "portfolio.json")
+# ── 보유 종목 DB (Google Sheets) ──────────────────────────────
+# GOOGLE_SHEETS_CREDENTIALS: 서비스 계정 키 JSON 원문(문자열) 전체를 그대로 넣는다.
+# GOOGLE_SHEET_ID: 시트 URL의 /d/{이 부분}/edit 에 해당하는 ID.
+GOOGLE_SHEETS_CREDENTIALS = os.environ.get("GOOGLE_SHEETS_CREDENTIALS")
+GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID")
+SHEET_HOLDINGS_TAB = "Holdings"
+SHEET_META_TAB = "Meta"
+
+# ── AI 참고의견 (Gemini) ─────────────────────────────────────
+# 규칙 기반 판정 결과에 병기되는 보조 설명용. 미설정 시 AI 의견 없이 리포트 발송.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")

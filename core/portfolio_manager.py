@@ -181,12 +181,18 @@ def apply_peak_price_updates(portfolio, holding_results):
 
 
 def build_decisions(portfolio, market, screened_result):
-    """market_analyzer / stock_screener 결과를 받아 최종 의사결정 묶음을 반환."""
+    """market_analyzer / stock_screener 결과를 받아 최종 의사결정 묶음을 반환.
+
+    신규 편입 후보는 보유 종목이 0개(완전 공백)일 때만 추천한다. 일부 슬롯만
+    비어 있는 경우(예: 5개 중 2개 보유)에는 신규 추천도, SWAP 제안도 하지 않고
+    보유 종목 판정과 watchlist만 안내한다 (보유 중 판단은 사용자의 별도 검토 영역).
+    """
     holding_results = evaluate_holdings(portfolio)
     open_slots = max(0, config.MAX_HOLDINGS - len(portfolio.get("holdings", [])))
     screened = screened_result.get("candidates", [])
 
-    new_candidates = find_new_candidates(portfolio, screened, open_slots) if open_slots > 0 else []
+    is_empty_portfolio = len(portfolio.get("holdings", [])) == 0
+    new_candidates = find_new_candidates(portfolio, screened, config.MAX_HOLDINGS) if is_empty_portfolio else []
     swap_suggestions = find_swap_suggestions(holding_results, screened, portfolio) if open_slots == 0 else []
 
     watchlist = [c for c in screened if c["ticker"] not in

@@ -12,7 +12,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import market_analyzer, portfolio_manager, email_sender
+from core import market_analyzer, portfolio_manager, email_sender, ai_advisor
 
 
 def test_market_state_uptrend():
@@ -86,6 +86,68 @@ def test_net_buy_exit_overrides_hold(monkeypatch):
     print("OK: test_net_buy_exit_overrides_hold")
 
 
+def test_new_candidates_only_when_portfolio_empty(monkeypatch):
+    monkeypatch.setattr(portfolio_manager, "_get_current_price", lambda t: 71000)
+    monkeypatch.setattr(portfolio_manager, "_get_today_net_buy_positive", lambda t: True)
+
+    market = {"overall_state": "중립"}
+    screened = {"candidates": [
+        {"ticker": "000001", "name": "후보1", "grade": "S", "volume_ratio": 2.5, "net_buy_days": 3},
+    ]}
+
+    empty_portfolio = {"total_capital": 100_000_000, "cash": 100_000_000, "holdings": []}
+    decisions_empty = portfolio_manager.build_decisions(empty_portfolio, market, screened)
+    assert len(decisions_empty["new_candidates"]) == 1, decisions_empty
+
+    filled_portfolio = {
+        "total_capital": 100_000_000, "cash": 50_000_000,
+        "holdings": [{
+            "ticker": "005930", "name": "테스트종목", "grade": "S",
+            "quantity": 100, "avg_price": 70000, "entry_stage": 1,
+            "peak_price": 70000, "entry_date": "2026-07-01",
+        }],
+    }
+    decisions_filled = portfolio_manager.build_decisions(filled_portfolio, market, screened)
+    assert decisions_filled["new_candidates"] == [], decisions_filled
+    print("OK: test_new_candidates_only_when_portfolio_empty")
+
+
+def test_ai_advisor_returns_empty_without_api_key(monkeypatch):
+    monkeypatch.setattr(ai_advisor.config, "GEMINI_API_KEY", None)
+    result = ai_advisor.generate_ai_opinions(
+        {"market": {}, "holdings": [], "new_candidates": [], "swap_suggestions": []}
+    )
+    assert result == {}, result
+    print("OK: test_ai_advisor_returns_empty_without_api_key")
+
+
+def test_report_text_includes_ai_opinion_when_present():
+    decisions = {
+        "market": {
+            "KOSPI": {"state": "상승장", "price": 2800, "ma5": 2790, "ma20": 2750, "ma60": 2700},
+            "KOSDAQ": {"state": "중립", "price": 850, "ma5": 848, "ma20": 850, "ma60": 845},
+            "overall_state": "중립",
+            "recommended": {"stock_min": 0.5, "stock_max": 0.7, "cash_min": 0.3, "cash_max": 0.5},
+            "data_error": False,
+        },
+        "holdings": [{
+            "ticker": "005930", "name": "테스트종목", "grade": "S",
+            "avg_price": 70000, "current_price": 71000, "return_pct": 1.43,
+            "entry_stage": 1, "net_buy_ok": True,
+            "decision": "HOLD", "reason": "추세 양호, 관망",
+        }],
+        "new_candidates": [],
+        "swap_suggestions": [],
+        "watchlist": [],
+        "open_slots": 4,
+        "ai_opinions": {"005930": "반도체 업황 개선 흐름이 지속되고 있어 참고할 만합니다."},
+    }
+    text = email_sender.build_report_text(decisions)
+    assert "AI 참고의견: 반도체 업황 개선 흐름" in text, text
+    assert "자동 생성되어 덧붙인 보조 설명" in text, text
+    print("OK: test_report_text_includes_ai_opinion_when_present")
+
+
 def test_report_text_builds_without_error():
     decisions = {
         "market": {
@@ -125,7 +187,13 @@ if __name__ == "__main__":
     test_market_state_uptrend()
     test_market_state_downtrend()
 
-    for fn in (test_stop_loss_decision, test_target_profit_decision, test_net_buy_exit_overrides_hold):
+    for fn in (
+        test_stop_loss_decision,
+        test_target_profit_decision,
+        test_net_buy_exit_overrides_hold,
+        test_new_candidates_only_when_portfolio_empty,
+        test_ai_advisor_returns_empty_without_api_key,
+    ):
         mp = _FakeMonkeypatch()
         try:
             fn(mp)
@@ -133,4 +201,5 @@ if __name__ == "__main__":
             mp.undo()
 
     test_report_text_builds_without_error()
+    test_report_text_includes_ai_opinion_when_present()
     print("\n모든 오프라인 로직 테스트 통과.")
