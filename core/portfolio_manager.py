@@ -76,6 +76,11 @@ def evaluate_holdings(portfolio):
     results = []
     for h in portfolio.get("holdings", []):
         ticker = h["ticker"]
+        if not h.get("avg_price"):
+            results.append({**h, "decision": "DATA_ERROR",
+                             "reason": "평단가(avg_price) 미입력 - Sheets 확인 필요"})
+            continue
+
         price = _get_current_price(ticker)
         if price is None:
             results.append({**h, "decision": "DATA_ERROR",
