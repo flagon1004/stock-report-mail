@@ -6,14 +6,21 @@ market_analyzer -> stock_screener -> portfolio_manager -> ai_advisor -> email_se
 보유 종목 DB는 Google Sheets(core/sheets_client)를 사용한다.
 
 실행 실패 시(예: 데이터 수집 전면 실패) 가능한 경우 오류 알림 메일을 보낸다.
+pykrx는 KRX_ID/KRX_PW가 설정되어 있으면 import 시점에 자동으로 KRX 로그인을
+시도하는데, KRX 서버가 비정상 응답을 주면 그 자리에서 예외가 나며 import 자체가
+죽을 수 있다. email_sender만 미리 가져오고 pykrx에 의존하는 모듈들은 run() 안에서
+지연 임포트해서, 이런 import 단계 실패도 아래 try/except가 잡아 실패 알림 메일을
+보낼 수 있게 한다.
 """
 import sys
 import traceback
 
-from core import market_analyzer, stock_screener, portfolio_manager, ai_advisor, email_sender, sheets_client
+from core import email_sender
 
 
 def run():
+    from core import market_analyzer, stock_screener, portfolio_manager, ai_advisor, sheets_client
+
     market = market_analyzer.analyze_market()
     screened = stock_screener.screen_stocks()
     portfolio = sheets_client.load_portfolio()
