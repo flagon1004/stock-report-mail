@@ -69,7 +69,10 @@ def load_portfolio():
     meta_ws = _find_worksheet(sheet, config.SHEET_META_TAB)
 
     holdings = []
-    for row in holdings_ws.get_all_records():
+    # numericise_ignore=['all']: gspread가 "051900" 같은 숫자형 문자열을 셀 서식과
+    # 무관하게 자동으로 int(51900)로 변환해 앞자리 0을 없애버리는 것을 막는다.
+    # 모든 값을 원본 문자열로 받고, 숫자 필드는 아래 _num()으로 직접 변환한다.
+    for row in holdings_ws.get_all_records(numericise_ignore=["all"]):
         ticker = str(row.get("ticker", "")).strip()
         if not ticker:
             continue
