@@ -22,7 +22,7 @@ portfolio.json 스키마:
 """
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import config
@@ -31,23 +31,22 @@ from pykrx import stock
 
 
 def _get_current_price(ticker):
+    """당일부터 최근 5거래일 후보까지 거슬러 올라가며 종가를 조회한다.
+    보유종목은 최대 5개뿐이라 실패 원인을 로그로 남겨도 로그가 폭주하지 않는다."""
+    tried = []
     try:
-        today = datetime.today().strftime("%Y%m%d")
-        df = stock.get_market_ohlcv_by_date(today, today, ticker)
-        if df is None or df.empty:
-            # 당일 데이터가 아직 없으면 최근 거래일 기준으로 재시도
-            from datetime import timedelta
-            d = datetime.today()
-            for _ in range(5):
-                d -= timedelta(days=1)
-                date_str = d.strftime("%Y%m%d")
-                df = stock.get_market_ohlcv_by_date(date_str, date_str, ticker)
-                if df is not None and not df.empty:
-                    break
-        if df is None or df.empty:
-            return None
-        return float(df["종가"].iloc[-1])
-    except Exception:
+        d = datetime.today()
+        for _ in range(6):  # 당일 + 최근 5일 후보
+            date_str = d.strftime("%Y%m%d")
+            tried.append(date_str)
+            df = stock.get_market_ohlcv_by_date(date_str, date_str, ticker)
+            if df is not None and not df.empty:
+                return float(df["종가"].iloc[-1])
+            d -= timedelta(days=1)
+        print(f"[경고] {ticker} 현재가 조회 실패 - 조회 시도한 날짜 전부 데이터 없음: {tried}")
+        return None
+    except Exception as e:
+        print(f"[경고] {ticker} 현재가 조회 실패 - {type(e).__name__}: {e} (시도한 날짜: {tried})")
         return None
 
 
